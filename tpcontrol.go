@@ -95,6 +95,9 @@ func New(nbRequests int, nbSeconds int, nbQueues int, tokenPoolSize int) (*TPSch
 func (sc *TPScheduler) CanIGO(priority int) error {
 
 	// Does the queue exist ?
+	if priority < 0 {
+		return errors.New("Priority level can't be lower than 0")
+	}
 	if priority+1 > len(sc.prioQueues) {
 		errorMsg := fmt.Sprintf("Priority level %d does not exist : you only have %d priority queues, therefor the lowest possible priority is %d",
 			priority, len(sc.prioQueues), len(sc.prioQueues)-1)
