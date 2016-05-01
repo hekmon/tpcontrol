@@ -1,7 +1,7 @@
 # TPControl
 [![GoDoc](https://godoc.org/github.com/Hekmon/TPControl?status.svg)](https://godoc.org/github.com/Hekmon/TPControl)
 
-TPControl provide a simple yet powerfull scheduler which allows to manage a given throughput for any number of workers and optionally allows to prioritize their requests as well.
+TPControl provides a simple yet powerfull scheduler which allows to manage a given throughput for any number of workers and optionally allows to prioritize their requests as well.
 
 # Use case
 

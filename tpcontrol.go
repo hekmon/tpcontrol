@@ -1,4 +1,5 @@
-// TPControl provide a simple yet powerfull scheduler which allows to manage a given throughput for any number of workers and optionally allows to prioritize their requests as well.
+// Package tpcontrol provides a simple yet powerfull scheduler which allows to manage a given throughput for any number 
+// of workers and optionally allows to prioritize their requests as well.
 package tpcontrol
 
 import (
