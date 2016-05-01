@@ -36,7 +36,7 @@ scheduler.CanIGO(0)
 
 This call will block until the scheduler says it is ok to perform. Notice the `0` parameter. It is indicating the priority queue. But as we don't care for priority right now and spawned our scheduler with only 1 queue, we can only use the only one existing, the highest priority : `0`.
 
-Using these sceduler parameters with the [example](https://github.com/Hekmon/TPControl/blob/master/example/tpcontrol_example.go) will output :
+Using these scheduler parameters with the [example](https://github.com/Hekmon/TPControl/blob/master/example/tpcontrol_example.go) will output :
 ```
 The token pool size is 0, let's wait 0 to let it fill up completly (based on flow defined as 5.00 req/s).
 Time's up !
@@ -59,7 +59,7 @@ For those wondering why batch number are not respected (you are right, the sched
 
 ## Simple throughput manager with a token pool/buffer
 
-But sometimes, you app won't send any requests during a certain amount of time, so why not take advantage in it and allow us a burst when requests will come ? This should not affect our global throughput average is set up correctly.
+But sometimes, your app won't send any requests during a certain amount of time, so why not take advantage of it and allow us a burst when requests will come ? This should not affect our global throughput average is set up correctly.
 
 Let's keep our last example of 5 requests/s. But let's say if we did not sent any requests for the last second (5 requests) we allow ourself to use them anyway ? This is our token pool.
 
@@ -98,9 +98,84 @@ The demo program wait the right time to let the pool fill itself up and have its
 As you can see the first 5 requests used the tokens in the storage pool to execute them right away. Then, the storage pool was depleted and the others wokers had to wait the new tokens to execute themself. New tokens still generated in a way to respect the given throughput (200ms).
 
 
-## Advanced throughput manager with priority management and a token pool
+## Advanced throughput manager with priority management
 
-`TODO`
+And a token pool, of course.
+
+This time, let's say we have 3 differents process each less important than the other. Every request coming from n should be treated before requests from n+1 and each requests coming from n+1 should be treated before n+2. You get the idea.
+
+Of course each process can make/create several concurrent requests and their should be treated as FIFO.
+
+Keeping our through put of 5 requests per second (but no token pool) we instanciate the scheduler like this :
+```go
+scheduler, err := tpcontrol.New(5, 1, 3, 0)
+if err != nil {
+	panic(err)
+}
+```
+
+Remember, [godoc](https://godoc.org/github.com/Hekmon/TPControl#New) is your friend.
+
+Each batch will create a worker for each queue : on high priority (0), one medium priority (1) and one low priority (2). Let's run it with 3 batches :
+```
+The token pool size is 0, let's wait 0 to let it fill up completly (based on flow defined as 5.00 req/s).
+Time's up !
+
+9 workers launched...
+
+I am a worker with a priority of 0 coming from the batch 0 and this experiment started 199.6418ms ago.
+I am a worker with a priority of 0 coming from the batch 1 and this experiment started 399.7835ms ago.
+I am a worker with a priority of 0 coming from the batch 2 and this experiment started 599.9282ms ago.
+I am a worker with a priority of 1 coming from the batch 0 and this experiment started 799.07ms ago.
+I am a worker with a priority of 1 coming from the batch 1 and this experiment started 999.4399ms ago.
+I am a worker with a priority of 1 coming from the batch 2 and this experiment started 1.1995819s ago.
+I am a worker with a priority of 2 coming from the batch 0 and this experiment started 1.3997237s ago.
+I am a worker with a priority of 2 coming from the batch 1 and this experiment started 1.599866s ago.
+I am a worker with a priority of 2 coming from the batch 2 and this experiment started 1.7990072s ago.
+
+9 workers ended their work.
+```
+
+Of course throughput is respected but the import thing here is that the first 3 requests allowed to perform were the priority 0 from each different batch. Then the priority 1. Then 2. You get the idea.
+
+
+So... A last one with a token pool ? :3
+
+Let's go for a 10 requests over 3 seconds with 3 different priority queues and a token pool of 5 (because why not) :
+```go
+scheduler, err := tpcontrol.New(10, 3, 3, 5)
+if err != nil {
+	panic(err)
+}
+```
+
+With a 4 batches run :
+```
+The token pool size is 5, let's wait 1.5s to let it fill up completly (based on flow defined as 3.33 req/s).
+Time's up !
+
+12 workers launched...
+
+I am a worker with a priority of 2 coming from the batch 1 and this experiment started 500.6µs ago.
+I am a worker with a priority of 0 coming from the batch 0 and this experiment started 500.6µs ago.
+I am a worker with a priority of 1 coming from the batch 0 and this experiment started 500.6µs ago.
+I am a worker with a priority of 2 coming from the batch 0 and this experiment started 500.6µs ago.
+I am a worker with a priority of 0 coming from the batch 1 and this experiment started 500.6µs ago.
+I am a worker with a priority of 0 coming from the batch 2 and this experiment started 299.2146ms ago.
+I am a worker with a priority of 0 coming from the batch 3 and this experiment started 599.4277ms ago.
+I am a worker with a priority of 1 coming from the batch 1 and this experiment started 898.8548ms ago.
+I am a worker with a priority of 1 coming from the batch 2 and this experiment started 1.1990676s ago.
+I am a worker with a priority of 1 coming from the batch 3 and this experiment started 1.4992807s ago.
+I am a worker with a priority of 2 coming from the batch 2 and this experiment started 1.7987152s ago.
+I am a worker with a priority of 2 coming from the batch 3 and this experiment started 2.0994297s ago.
+
+12 workers ended their work.
+```
+
+Here you might wonder why the first requests (using the buffered tokens in the pool) are not ordered. This is the same reason as for the "Simple throughput manager" : we declared all the workers sequentially, GO decided on its own which one to start first. And as the first ones ask the scheduler, there were no wait, tokens were availables, scheduler unlock them almost instantly.
+
+Once the token pool depleted, workers registered but were not unlock instantly and when a token became available, the scheduler unlocked the oldest one in the highest priority queue (`I am a worker with a priority of 0 coming from the batch 2 and this experiment started 299.2146ms ago.`).
+
 
 # How does it work ?
 
