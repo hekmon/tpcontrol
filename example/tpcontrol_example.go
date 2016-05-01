@@ -8,14 +8,12 @@ import (
 )
 
 
-
 func main() {
-
-	// Let's go for a throughput of 5 requests by second, 3 differents priorities and and 10 tokens pool size
+	// Let's go for a throughput of 5 requests by second, 3 differents priorities and and 5 tokens pool size
 	flowNbRequests := 5
 	flowNbSeconds  := 1
 	nbQueues       := 3
-	tokenPoolSize  := 5
+	tokenPoolSize  := 2
 	scheduler, err := tpcontrol.New(flowNbRequests, flowNbSeconds, nbQueues, tokenPoolSize)
 	if err != nil {
 		panic(err)
@@ -29,15 +27,13 @@ func main() {
 	time.Sleep(fillUpDuration)
 	fmt.Println("Time's up !")
 
-	// Spawn workers by batches
-	experimentStarted := time.Now()
+	// Spawn priority workers by batches
 	nbBatches := 5
 	notifEnded := make(chan bool)
+	launchStarted := time.Now()
 	for currentBatch := 0 ; currentBatch < nbBatches ; currentBatch++ {
-
 		// One per queue (queue 0 == highest priority)
 		for currentQueue := 0 ; currentQueue < nbQueues ; currentQueue++ {
-
 			// Be carefull with goroutines and scope
 			localBatch := currentBatch
 			localQueue := currentQueue
@@ -47,7 +43,7 @@ func main() {
 				// So our worker wants to work... great ! Let's ask the scheduler.
 				scheduler.CanIGO(localQueue) // This call will block until the scheduler let us work
 
-				fmt.Printf("I am a worker with a priority of %d coming from the batch %d and this experiment started %v ago.\n", localQueue, localBatch, time.Since(experimentStarted))
+				fmt.Printf("I am a worker with a priority of %d coming from the batch %d and this experiment started %v ago.\n", localQueue, localBatch, time.Since(launchStarted))
 
 				// Tell the main goroutine this worker is done
 				notifEnded <- true
@@ -67,6 +63,9 @@ func main() {
 			break
 		}
 	}
+
+	// Stop the scheduler (not really needed here, but for the example)
+	scheduler.Stop()
 
 	// Done, thanks for watching
 	fmt.Printf("\n%d workers ended their work.\n\n", nbWorkers)

@@ -10,6 +10,7 @@ import (
 // TPScheduler allows managing a global throughput while ordering requests with differents priority
 type TPScheduler struct {
 	prioQueues   []scQueue
+	ticker       *time.Ticker
 	tokenPool    chan bool
 	notifChannel chan bool
 }
@@ -60,11 +61,12 @@ func New(nbRequests int, nbSeconds int, nbQueues int, tokenPoolSize int) (*TPSch
 
 	// Ticker/Seeder
 	tickerDuration := (time.Duration(nbSeconds) * time.Second) / time.Duration(nbRequests)
+	sc.ticker = time.NewTicker(tickerDuration)
 	go func() {
-		sc.tokenPool <- true // start with a token
-		for range time.NewTicker(tickerDuration).C {
-			sc.tokenPool <- true
+		for range sc.ticker.C {
+			sc.tokenPool <- true // Create/Add a new token in the pool
 		}
+		fmt.Println("Seeder ended")
 	}()
 
 	// Dispatcher
@@ -85,14 +87,35 @@ func New(nbRequests int, nbSeconds int, nbQueues int, tokenPoolSize int) (*TPSch
 				panic("A ghost, there is a ghost ! I'm too afraid to continue to work... (dispatcher broken)")
 			}
 		}
+		fmt.Println("Dispatcher ended")
 	}()
 
 	return &sc, nil
 }
 
-// CanIGO blocks the caller until the dispatcher confirms it is ok to proceed
-// priority is the queue index to use for registration (0 being the highest priority)
+
+// Stop end the dispatcher and the seeder goroutine of the TPScheduler. It also unlocks all the queues. Best is to be sure to not have anymore worker waiting.
+// After the call, the GC should be able to clean the TPScheduler.
+func (sc *TPScheduler) Stop(priority int) error {
+	// Stop the ticker
+	sc.ticker.Stop()
+
+	// Closes channels
+	close(sc.notifChannel)
+	close(sc.tokenPool)
+
+	return nil
+}
+
+
+// CanIGO blocks the caller until the dispatcher confirms it is ok to proceed.
+// Priority parameter is the queue index to use for registration (0 being the highest priority)
 func (sc *TPScheduler) CanIGO(priority int) error {
+
+	// Is the scheduler running ?
+	if sc.ticker == nil {
+		return errors.New("TPScheduler is not running (anymore ?)")
+	}
 
 	// Does the queue exist ?
 	if priority < 0 {
