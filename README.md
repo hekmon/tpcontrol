@@ -13,9 +13,47 @@ Also, when your service is becoming big, you might have severals differents proc
 
 # Usage
 
+Every example below is from (and can be try with) the example source code [here](https://github.com/Hekmon/TPControl/blob/master/example/tpcontrol_example.go).
+
 ## Simple throughput manager
 
-`TODO`
+For the first example, let's keep it simple : we want a scheduler for 5 requests per second. And that's it. No cache, no burst no priority.
+
+Instanciating this scheduler should look like this :
+```go
+scheduler, err := tpcontrol.New(5, 1, 1, 0)
+if err != nil {
+	panic(err)
+}
+```
+
+The first two parameters represent the desired throughput : 5 requests on 1 second. For a simple throughput manager, leave the last 2 at 1 (for nbQueues) and 0 (for tokenPoolSize).
+
+To hook on the scheduler, the only thing a worker need to do is the following call :
+```go
+scheduler.CanIGO(0)
+```
+
+This call will block until the scheduler says it is ok to perform. Notice the `0` parameter. It is indicating the priority queue. But as we don't care for priority right now and spawned our scheduler with only 1 queue, we can only use the only one existing, the highest priority : `0`.
+
+Using these sceduler parameters with the [example](https://github.com/Hekmon/TPControl/blob/master/example/tpcontrol_example.go) will output :
+```
+The token pool size is 0, let's wait 0 to let it fill up completly (based on flow defined as 5.00 req/s).
+Time's up !
+
+5 workers launched...
+
+I am a worker with a priority of 0 coming from the batch 1 and this experiment started 200.142ms ago.
+I am a worker with a priority of 0 coming from the batch 0 and this experiment started 400.2867ms ago.
+I am a worker with a priority of 0 coming from the batch 2 and this experiment started 600.4337ms ago.
+I am a worker with a priority of 0 coming from the batch 3 and this experiment started 799.8043ms ago.
+I am a worker with a priority of 0 coming from the batch 4 and this experiment started 999.9516ms ago.
+
+5 workers ended their work.
+```
+
+As you can see, each worker started working with 200ms difference, respecting our throughput of 5 requests per second. 
+
 
 ## Simple throughput manager with a token pool/buffer
 
@@ -51,7 +89,7 @@ When reading a token from the token pool buffer, the dispatcher will immediately
 
 ### The notification channel
 
-This is part of the main trick. This channel is unbuffered and allows to not have the dispatcher going postal on an infite loop while checking every queue all the time : while empty the dispatcher will block on reading it. When a client (or many) register for  execution, they send (more on that just after) a notification through this channel to wake up the sceduler (if a token is available of course).
+This is part of the main trick. This channel is unbuffered and allows to not have the dispatcher going postal on an infite loop while checking every queue all the time : while empty the dispatcher will block on reading it. When a client (or many) register for  execution, they send (more on that just after) a notification through this channel to wake up the scheduler (if a token is available of course).
 
 ### The blocking registration method
 
@@ -63,7 +101,7 @@ Finally. When a worker calls this method, 3 things happen :
 
 The lock is a simple mutex spawned and pre-locked added to the priority queue passed as parameter of the method.
 
-Then the method must inform the dispatcher that a client is waiting, for that a write inside the notification channel is needed. But if the method try to make that write synchronously, the method might hangs because others workers might be registrating in the same time. Imagine another worker with a lesser priority but already registered : by locking the channel with its write, we might spend to much time trying to make that notification while the dispatcher already unlocked our client lock. Making this channel buffered to overcome this limitation is also not a good idea : how to determine the/a good buffer length ? The solution is simple : launch the notification in another goroutine (they are cheap !).
+Then the method must inform the dispatcher that a client is waiting, for that a write inside the notification channel is needed. But if the method try to make that write synchronously, the method might hangs because others workers might be registrating in the same time. Imagine another worker with a lesser priority but already registered trying to make its own notification : by locking the channel with its write, we might spend to much time trying to make ours while the dispatcher already unlocked our client lock. Making this channel buffered to overcome this limitation is also not a good idea : how to determine the/a good buffer length ? The solution is simple : launch the notification in another goroutine (they are cheap !).
 
 This way the registration method can get to the third point : holding up on its personnal lock and be reading for the dispatcher to unlock it.
 
