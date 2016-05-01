@@ -27,7 +27,7 @@ if err != nil {
 }
 ```
 
-The first two parameters represent the desired throughput : 5 requests on 1 second. For a simple throughput manager, leave the last 2 at 1 (for nbQueues) and 0 (for tokenPoolSize).
+The first two parameters represent the desired throughput : 5 requests on 1 second. For a simple throughput manager, leave the last 2 at 1 (for nbQueues) and 0 (for tokenPoolSize). More details on [godoc](https://godoc.org/github.com/Hekmon/TPControl#New).
 
 To hook on the scheduler, the only thing a worker need to do is the following call :
 ```go
@@ -52,12 +52,51 @@ I am a worker with a priority of 0 coming from the batch 4 and this experiment s
 5 workers ended their work.
 ```
 
-As you can see, each worker started working with 200ms difference, respecting our throughput of 5 requests per second. 
+As you can see, each worker started working with a 200ms gap, respecting our throughput of 5 requests per second.
+
+For those wondering why batch number are not respected (you are right, the scheduler's queues are FIFO !) this is only related how GO manage and start goroutines. We created them in order, GO started them how it liked ;)
 
 
 ## Simple throughput manager with a token pool/buffer
 
-`TODO`
+But sometimes, you app won't send any requests during a certain amount of time, so why not take advantage in it and allow us a burst when requests will come ? This should not affect our global throughput average is set up correctly.
+
+Let's keep our last example of 5 requests/s. But let's say if we did not sent any requests for the last second (5 requests) we allow ourself to use them anyway ? This is our token pool.
+
+The scheduler would be instanciated like this :
+```go
+scheduler, err := tpcontrol.New(5, 1, 1, 5)
+if err != nil {
+	panic(err)
+}
+```
+So here we have : 5 requests in 1 second, 1 queue and 5 for the token pool size. Don't hesitate to check [godoc](https://godoc.org/github.com/Hekmon/TPControl#New).
+
+For the example, let's rise the number of batches to 10 :
+```
+The token pool size is 5, let's wait 1s to let it fill up completly (based on flow defined as 5.00 req/s).
+Time's up !
+
+10 workers launched...
+
+I am a worker with a priority of 0 coming from the batch 4 and this experiment started 500.9µs ago.
+I am a worker with a priority of 0 coming from the batch 0 and this experiment started 500.9µs ago.
+I am a worker with a priority of 0 coming from the batch 1 and this experiment started 500.9µs ago.
+I am a worker with a priority of 0 coming from the batch 2 and this experiment started 500.9µs ago.
+I am a worker with a priority of 0 coming from the batch 3 and this experiment started 500.9µs ago.
+I am a worker with a priority of 0 coming from the batch 5 and this experiment started 199.1415ms ago.
+I am a worker with a priority of 0 coming from the batch 7 and this experiment started 399.2836ms ago.
+I am a worker with a priority of 0 coming from the batch 6 and this experiment started 598.6465ms ago.
+I am a worker with a priority of 0 coming from the batch 8 and this experiment started 798.7885ms ago.
+I am a worker with a priority of 0 coming from the batch 9 and this experiment started 998.9306ms ago.
+
+10 workers ended their work.
+```
+
+The demo program wait the right time to let the pool fill itself up and have its maximum token capacity available.
+
+As you can see the first 5 requests used the tokens in the storage pool to execute them right away. Then, the storage pool was depleted and the others wokers had to wait the new tokens to execute themself. New tokens still generated in a way to respect the given throughput (200ms).
+
 
 ## Advanced throughput manager with priority management and a token pool
 
