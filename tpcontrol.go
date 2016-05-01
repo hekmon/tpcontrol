@@ -86,7 +86,7 @@ func New(nbRequests int, nbSeconds int, nbQueues int, tokenPoolSize int) (*TPSch
 				// Once the ticker is stopped, we can safely close the tokenPool and mark the seeder as closed
 				close(sc.tokenPool)
 				sc.seeder.runningFlag.Unlock()
-				fmt.Println("Seeder ended")
+				// fmt.Println("Seeder ended")
 				return
 			}
 		}
@@ -114,7 +114,7 @@ func New(nbRequests int, nbSeconds int, nbQueues int, tokenPoolSize int) (*TPSch
 		}
 		// unlock the running flag (used by Stop())
 		sc.dispatcherRunningFlag.Unlock()
-		fmt.Println("Dispatcher ended")
+		// fmt.Println("Dispatcher ended")
 	}()
 
 	return &sc, nil
@@ -164,7 +164,7 @@ func (sc *TPScheduler) CanIGO(priority int) error {
 // Best is to be sure to not call canIGO() anymore once the Stop() called in case one slip in during the stop process.
 // After the call, the GC should be able to clean the TPScheduler entirely if unreferenced.
 func (sc *TPScheduler) Stop() {
-	fmt.Println("Stopping the scheduler...")
+	// fmt.Println("Stopping the scheduler...")
 
 	// Send the signal to stop the seeder
 	// It will stop and dereference the seeder's ticker but most importantly, close the tokenPool
@@ -183,5 +183,5 @@ func (sc *TPScheduler) Stop() {
 		for sc.prioQueues[currentQueue].processQueue() {}
 	}
 
-	fmt.Println("Scheduler stopped !")
+	// fmt.Println("Scheduler stopped !")
 }
