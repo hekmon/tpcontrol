@@ -3,10 +3,8 @@ package main
 import (
 	"fmt"
 	"time"
-
 	"github.com/hekmon/tpcontrol"
 )
-
 
 func main() {
 	// Let's go for a throughput of 5 requests by second, 3 differents priorities and and 2 tokens pool size
