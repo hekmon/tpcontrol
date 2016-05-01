@@ -9,7 +9,7 @@ import (
 
 
 func main() {
-	// Let's go for a throughput of 5 requests by second, 3 differents priorities and and 5 tokens pool size
+	// Let's go for a throughput of 5 requests by second, 3 differents priorities and and 2 tokens pool size
 	flowNbRequests := 5
 	flowNbSeconds  := 1
 	nbQueues       := 3
@@ -64,9 +64,11 @@ func main() {
 		}
 	}
 
-	// Stop the scheduler (not really needed here, but for the example)
-	scheduler.Stop()
-
 	// Done, thanks for watching
 	fmt.Printf("\n%d workers ended their work.\n\n", nbWorkers)
+
+	// Stop the scheduler (not really needed here, but for the example)
+	time.Sleep(time.Second)
+	scheduler.Stop()
+	time.Sleep(time.Second)
 }
