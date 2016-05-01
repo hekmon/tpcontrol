@@ -7,7 +7,7 @@ TPControl provide a simple yet powerfull scheduler which allows to manage a give
 
 For everything you want. But in my case, I developped this package for a specific need : to keep in check API requests on an external service.
 
-Usually with external/public API, you have to maintain a maximal throughput in order to not get your API key or account banned (temporarily or permanently). By spawning a TPScheduler and setting the throughput you need, you will be assured that every worker asking the scheduler if it can start will only begin when the defined throughput allows it.
+Usually with external/public API, you have to maintain a maximal throughput in order to avoid getting your key or account banned (temporarily or permanently). By spawning a TPScheduler and setting the throughput you need, you will be assured that every worker asking the scheduler if it can start will only begin when the defined throughput allows it.
 
 Also, when your service is becoming big, you might have severals differents process each with different priority making all several requests in parallel. TPControl offer priority queues management in order to maintain your throughput in any case but by unlocking more important workers first.
 
@@ -17,9 +17,9 @@ Every example below is from (and can be try with) the example source code [here]
 
 ## Simple throughput manager
 
-For the first example, let's keep it simple : we want a scheduler for 5 requests per second. And that's it. No cache, no burst no priority.
+For the first example, let's keep it simple : we want a scheduler for 5 requests per second. And that's it. No cache, no burst and no priority stuff.
 
-Instanciating this scheduler should look like this :
+Instanciating this scheduler would look like this :
 ```go
 scheduler, err := tpcontrol.New(5, 1, 1, 0)
 if err != nil {
@@ -27,14 +27,14 @@ if err != nil {
 }
 ```
 
-The first two parameters represent the desired throughput : 5 requests on 1 second. For a simple throughput manager, leave the last 2 at 1 (for nbQueues) and 0 (for tokenPoolSize). More details on [godoc](https://godoc.org/github.com/Hekmon/TPControl#New).
+The first two parameters represent the desired throughput : 5 requests over 1 second. For a simple throughput manager, leave the last 2 at 1 (for nbQueues) and 0 (for tokenPoolSize). More details on [godoc](https://godoc.org/github.com/Hekmon/TPControl#New).
 
 To hook on the scheduler, the only thing a worker need to do is the following call :
 ```go
 scheduler.CanIGO(0)
 ```
 
-This call will block until the scheduler says it is ok to perform. Notice the `0` parameter. It is indicating the priority queue. But as we don't care for priority right now and spawned our scheduler with only 1 queue, we can only use the only one existing, the highest priority : `0`.
+This call will block until the scheduler says it is ok to perform. Notice the `0` parameter. It is indicating the priority queue. As we don't care for priority right now, we spawned our scheduler with only 1 queue, so we must use the only one existing, the highest priority queue : `0`.
 
 Using these scheduler parameters with the [example](https://github.com/Hekmon/TPControl/blob/master/example/tpcontrol_example.go) will output :
 ```
@@ -54,14 +54,14 @@ I am a worker with a priority of 0 coming from the batch 4 and this experiment s
 
 As you can see, each worker started working with a 200ms gap, respecting our throughput of 5 requests per second.
 
-For those wondering why batch number are not respected (you are right, the scheduler's queues are FIFO !) this is only related how GO manage and start goroutines. We created them in order, GO started them how it liked ;)
+For those wondering why batch numbers are not in order (you are right, the scheduler's queues are FIFO !) this is only related on how GO manages and starts goroutines. We created them in order, GO started them how it wanted ;)
 
 
 ## Simple throughput manager with a token pool/buffer
 
-But sometimes, your app won't send any requests during a certain amount of time, so why not take advantage of it and allow us a burst when requests will come ? This should not affect our global throughput average is set up correctly.
+But sometimes, your app won't send any requests during a certain amount of time, so why not take advantage of it and allow us a burst when requests will come ? This should not affect our global throughput average if set up correctly.
 
-Let's keep our last example of 5 requests/s. But let's say if we did not sent any requests for the last second (5 requests) we allow ourself to use them anyway ? This is our token pool.
+Let's keep our last example of 5 requests/s. But let's say this time that if we did not sent any requests for the last second (so... 5 requests) we allow ourself to use them anyway. This is our token pool.
 
 The scheduler would be instanciated like this :
 ```go
@@ -70,9 +70,9 @@ if err != nil {
 	panic(err)
 }
 ```
-So here we have : 5 requests in 1 second, 1 queue and 5 for the token pool size. Don't hesitate to check [godoc](https://godoc.org/github.com/Hekmon/TPControl#New).
+So here we have : 5 requests over 1 second, 1 queue and 5 for the token pool size. Don't hesitate to check [godoc](https://godoc.org/github.com/Hekmon/TPControl#New).
 
-For the example, let's rise the number of batches to 10 :
+For the example, let's rise the number of batches up to 10 :
 ```
 The token pool size is 5, let's wait 1s to let it fill up completly (based on flow defined as 5.00 req/s).
 Time's up !
@@ -95,28 +95,30 @@ I am a worker with a priority of 0 coming from the batch 9 and this experiment s
 
 The demo program wait the right time to let the pool fill itself up and have its maximum token capacity available.
 
-As you can see the first 5 requests used the tokens in the storage pool to execute them right away. Then, the storage pool was depleted and the others wokers had to wait the new tokens to execute themself. New tokens still generated in a way to respect the given throughput (200ms).
+As you can see the first 5 requests used the tokens in the storage pool to execute themself right away. Then, the storage pool was depleted and the others workers had to wait the new tokens to continue their execution. New tokens are still generated in order to respect the given throughput (200ms).
 
 
 ## Advanced throughput manager with priority management
 
-And a token pool, of course.
+This time, let's say we have 3 differents process each less important than the other. Every request coming from `n` should be treated before requests from `n+1` and each requests coming from `n+1` should be treated before n+2. These are our priority queues.
 
-This time, let's say we have 3 differents process each less important than the other. Every request coming from n should be treated before requests from n+1 and each requests coming from n+1 should be treated before n+2. You get the idea.
-
-Of course each process can make/create several concurrent requests and their should be treated as FIFO.
-
-Keeping our through put of 5 requests per second (but no token pool) we instanciate the scheduler like this :
+Keeping our throughput of 5 requests per second (but with no token pool for now) we would instanciate the scheduler like this :
 ```go
 scheduler, err := tpcontrol.New(5, 1, 3, 0)
 if err != nil {
 	panic(err)
 }
 ```
-
 Remember, [godoc](https://godoc.org/github.com/Hekmon/TPControl#New) is your friend.
 
-Each batch will create a worker for each queue : on high priority (0), one medium priority (1) and one low priority (2). Let's run it with 3 batches :
+So if a worker wants to register itself with the lowest priority :
+```go
+scheduler.CanIGO(2)
+```
+
+As `2` is the index of the queue, it will register itself on the third queue (the lowest priority in this case).
+
+Each batch will create a worker for each queue : one high priority (0), one medium priority (1) and one low priority (2). Of course each process can make/create several concurrent requests and they should be treated as FIFO for a given priority. Let's run it with 3 batches :
 ```
 The token pool size is 0, let's wait 0 to let it fill up completly (based on flow defined as 5.00 req/s).
 Time's up !
@@ -136,7 +138,7 @@ I am a worker with a priority of 2 coming from the batch 2 and this experiment s
 9 workers ended their work.
 ```
 
-Of course throughput is respected but the import thing here is that the first 3 requests allowed to perform were the priority 0 from each different batch. Then the priority 1. Then 2. You get the idea.
+The important thing here is that the first 3 workers allowed to perform here were the priority 0 workers from each different batch. Then the priority 1. Then 2. Priority has been respected, so did throughput.
 
 
 So... A last one with a token pool ? :3
@@ -172,7 +174,7 @@ I am a worker with a priority of 2 coming from the batch 3 and this experiment s
 12 workers ended their work.
 ```
 
-Here you might wonder why the first requests (using the buffered tokens in the pool) are not ordered. This is the same reason as for the "Simple throughput manager" : we declared all the workers sequentially, GO decided on its own which one to start first. And as the first ones ask the scheduler, there were no wait, tokens were availables, scheduler unlock them almost instantly.
+Here you might wonder why the first requests (using the buffered tokens in the pool) are not ordered. This is the same reason as for the "Simple throughput manager" example : we did declare all the workers sequentially but GO decided on its own which one to start first. And as the first ones ask the scheduler, there were no wait, tokens were availables, scheduler unlock them almost instantly.
 
 Once the token pool depleted, workers registered but were not unlock instantly and when a token became available, the scheduler unlocked the oldest one in the highest priority queue (`I am a worker with a priority of 0 coming from the batch 2 and this experiment started 299.2146ms ago.`).
 
