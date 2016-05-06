@@ -7,13 +7,21 @@ TPControl provides a simple yet powerfull scheduler which allows to manage a giv
 
 For everything you want. But in my case, I developped this package for a specific need : to keep in check API requests on an external service.
 
-Usually with external/public API, you have to maintain a maximal throughput in order to avoid getting your key or account banned (temporarily or permanently). By spawning a TPScheduler and setting the throughput you need, you will be assured that every worker asking the scheduler if it can start will only begin when the defined throughput allows it.
+Usually with external/public API, you have to maintain a maximal throughput in order to avoid getting your key or account temporarily or permanently banned. By spawning a TPControl.Scheduler and setting the throughput you need, you will be assured that every worker asking the scheduler if it can start will only begin when the defined throughput allows it.
 
-Also, when your service is becoming big, you might have severals differents process each with different priority making all several requests in parallel. TPControl offer priority queues management in order to maintain your throughput in any case but by unlocking more important workers first.
+Also, when your service is becoming big, you might have severals differents process each with different priority making all several requests in parallel. TPControl offer priority queues management in order to maintain your throughput in any case but by unlocking most important workers first.
 
 # Usage
 
 Every example below is from (and can be try with) the example source code [here](https://github.com/Hekmon/TPControl/blob/master/example/tpcontrol_example.go).
+
+There is 3 differents usages/examples :
+
+* [Simple throughput manager](https://github.com/Hekmon/TPControl#simple-throughput-manager)
+* [Simple throughput manager with a token pool/buffer](https://github.com/Hekmon/TPControl#simple-throughput-manager-with-a-token-poolbuffer)
+* [Advanced throughput manager with priority management](https://github.com/Hekmon/TPControl#advanced-throughput-manager-with-priority-management)
+
+Or may be you are just interested on how is it working ? In that case, you can jump right [here](https://github.com/Hekmon/TPControl#how-does-it-work-).
 
 ## Simple throughput manager
 
@@ -27,7 +35,7 @@ if err != nil {
 }
 ```
 
-The first two parameters represent the desired throughput : 5 requests over 1 second. For a simple throughput manager, leave the last 2 at 1 (for nbQueues) and 0 (for tokenPoolSize). More details on [godoc](https://godoc.org/github.com/Hekmon/TPControl#New).
+The first two parameters represent the desired throughput : 5 requests over 1 second. For a simple throughput manager, leave the last 2 parameters at : 1 (for nbQueues) and 0 (for tokenPoolSize). More details on [godoc](https://godoc.org/github.com/Hekmon/TPControl#New).
 
 To hook on the scheduler, the only thing a worker need to do is the following call :
 ```go
@@ -59,7 +67,7 @@ For those wondering why batch numbers are not in order (you are right, the sched
 
 ## Simple throughput manager with a token pool/buffer
 
-But sometimes, your app won't send any requests during a certain amount of time, so why not take advantage of it and allow it a burst when requests will come ? This should not affect your global throughput if set up correctly (especially if the throughput is specified over a time range).
+But sometimes, your app won't send any requests during a certain amount of time, so why not take advantage of it and allow a burst when new requests will arrive after that ? This should not affect your global throughput if set up correctly (especially if the throughput is specified over a time range, like 5 minutes).
 
 Let's keep our last example of 5 req/s but this time, let's say that if we did not sent any requests for the last second (so... 5 requests) we allow ourself to use them anyway. This is our token pool.
 
@@ -181,19 +189,19 @@ Once the token pool depleted, workers registered but were not unlock instantly a
 
 # How does it work ?
 
-## For readers
+## If you does not mind reading
 
-The TPScheduler is composed by severals components :
+The TPControl.Scheduler is composed by severals components :
 
 * A seeder
 * A token pool buffer
 * A dispatcher
 * A notification channel
-* A blocking registration method  ( the `CanIGO(priority)` one )
+* A blocking registration method  ( the `CanIGO(priority)` )
 
 ### The seeder
 
-Mostly composed by a ticker set up with the throughput indicated with the two first parameters of the `New()` function : `nbRequests` and `nbSeconds`. The seeder runs on its own goroutine and at every tick, it will generate a token and try to put it on the pool. If the pool is full (or just unbuffered, aka at 0) the seeder waits to be able to drop the new token into the pool, putting itselft to sleep.
+Mostly composed by a ticker set up with the throughput indicated with the two first parameters of the `New()` function : `nbRequests` and `nbSeconds`. The seeder runs on its own goroutine and at every tick, it will generate a token and try to put it on the pool. If the pool is full (or just unbuffered, aka at 0) the seeder waits to be able to drop the new token into the pool, putting itself to sleep.
 
 ### The token pool buffer
 
@@ -201,11 +209,11 @@ This one is a go channel which can be buffered or unbuffured depending on the pa
 
 ### The dispatcher
 
-When reading a token from the token pool buffer, the dispatcher will immediately check if a client notification is present (more on that just after). When it reads a notification, the dispatcher will look for the oldest client in the highest priority queue in order to unlock it waiting for a new token to be available. If no client notification is present, the dispatcher wait for one (channel read) and do not consumme tokens anymore, putting the dispatcher and the seeder (if the token pool is unbuffered or full) on sleep. Similarly, if there is clients notifications pending, but no tokens available, the dispatcher waits (still a channel read) one before proceeding.
+When reading a token from the token pool buffer, the dispatcher will immediately check if a client notification is present (more on that just after). When it reads a notification, the dispatcher will look for the oldest client in the highest priority queue in order to unlock it. If no client notification is present, the dispatcher wait for one (channel read) and do not consumme tokens anymore, putting the dispatcher and the seeder (if the token pool is unbuffered or full) on sleep. Similarly, if there is clients notifications pending, but no tokens available, the dispatcher waits (another channel read) one before proceeding, putting itself to sleep in that case too.
 
 ### The notification channel
 
-This is part of the main trick. This channel is unbuffered and allows to not have the dispatcher going postal on an infite loop while checking every queue all the time : while empty, the dispatcher will block on reading it. When a client (or many) register for  execution, they send (more on that just after) a notification through this channel to wake up the scheduler (if a token is available of course).
+This is part of the main trick. This channel is unbuffered and allows to not have the dispatcher going postal on an infite loop while checking every queue all the time : while empty, the dispatcher will block on reading it. When a client (or many) register for execution, they send (more on that just after) a notification through this channel to wake up the scheduler (if it was locked on the notification chan and not the token pool of course).
 
 ### The blocking registration method
 
@@ -217,7 +225,7 @@ Finally. When a worker calls this method, 3 things happen :
 
 The lock is a simple mutex spawned and pre-locked added to the priority queue passed as parameter of the method.
 
-Then the method must inform the dispatcher that a client is waiting, for that a write inside the notification channel is needed. But if the method try to make that write synchronously, the method might hangs because others workers might be registrating in the same time. Imagine another worker with a lesser priority but already registered trying to make its own notification : by locking the channel with its write, we might spend to much time trying too make ours while the dispatcher would already have unlocked our client lock. Making this channel buffered to overcome this limitation is also not a good idea : how to determine the/a good buffer length ? The solution is simple : launch the notification in another goroutine (they are cheap !) to make the notification non blocking.
+Then the method must inform the dispatcher that a client is waiting and for that a write inside the notification channel is needed. But if the method try to make that write synchronously, the method might hangs because others workers would be registrating in the same time. Imagine another worker with a lesser priority but already registered trying to make its own notification : by locking the channel with its write, we might spend to much time trying too make our notification while the dispatcher would already have unlocked our client lock. Making this channel buffered to overcome this limitation is also not a good idea : how to determine the/a good buffer length ? The solution is simple : launch the notification in another goroutine (they are cheap !) to make the notification non blocking.
 
 This way the registration method can get to the third point : holding up on its personnal lock and be reading for the dispatcher to unlock it and finally return to the caller.
 

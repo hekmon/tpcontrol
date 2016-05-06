@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-// TPScheduler allows managing a global throughput while ordering requests with differents priority. Check the New() func.
-type TPScheduler struct {
+// Scheduler allows managing a global throughput while ordering requests with differents priority. Check the New() func.
+type Scheduler struct {
 	prioQueues            []scQueue
 	seeder                scSeeder
 	dispatcherRunningFlag sync.Mutex
@@ -48,12 +48,12 @@ type scSeeder struct {
 }
 
 
-// New returns a fully initialized, ready to use TPScheduler object.
+// New returns a fully initialized, ready to use Scheduler object.
 // nbRequests and nbSeconds are used to defined the throughput.
 // nbQueues indicates the number of priority queues to spawn.
 // tokenPoolSize is used to set up a token buffer in order to make requests bursts when throughput is not stable.
-func New(nbRequests int, nbSeconds int, nbQueues int, tokenPoolSize int) (*TPScheduler, error) {
-	var sc TPScheduler
+func New(nbRequests int, nbSeconds int, nbQueues int, tokenPoolSize int) (*Scheduler, error) {
+	var sc Scheduler
 
 	// Pre checks
 	if nbRequests < 1 {
@@ -129,11 +129,11 @@ func New(nbRequests int, nbSeconds int, nbQueues int, tokenPoolSize int) (*TPSch
 // CanIGO blocks the caller until the dispatcher confirms it is ok to proceed.
 // Priority parameter is the queue index to use for registration (0 being the highest priority).
 // If you spawned the scheduler with 3 queues : 0 for high priority, 1 for medium priority, 2 for low priority.
-func (sc *TPScheduler) CanIGO(priority int) error {
+func (sc *Scheduler) CanIGO(priority int) error {
 
 	// Is the scheduler running ?
 	if sc.seeder.ticker == nil {
-		return errors.New("TPScheduler is not running (anymore ?)")
+		return errors.New("Scheduler is not running (anymore ?)")
 	}
 
 	// Does the queue exist ?
@@ -166,10 +166,10 @@ func (sc *TPScheduler) CanIGO(priority int) error {
 }
 
 
-// Stop ends the dispatcher and the seeder goroutines of the TPScheduler. It also unlocks all the queues.
+// Stop ends the dispatcher and the seeder goroutines of the Scheduler. It also unlocks all the queues.
 // Best is to be sure to not call canIGO() anymore once the Stop() has been called in case one successfully slip in (that's bad luck !) during the stop process.
-// After the call, the GC should be able to clean the TPScheduler entirely if unreferenced.
-func (sc *TPScheduler) Stop() {
+// After the call, the GC should be able to clean the Scheduler entirely if unreferenced.
+func (sc *Scheduler) Stop() {
 	// fmt.Println("Stopping the scheduler...")
 
 	// Send the signal to stop the seeder
