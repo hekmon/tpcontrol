@@ -21,7 +21,7 @@ There is 3 differents usages/examples :
 * [Simple throughput manager with a token pool/buffer](https://github.com/Hekmon/TPControl#simple-throughput-manager-with-a-token-poolbuffer)
 * [Advanced throughput manager with priority management](https://github.com/Hekmon/TPControl#advanced-throughput-manager-with-priority-management)
 
-Or may be you are just interested on how is it working ? In that case, you can jump right [here](https://github.com/Hekmon/TPControl#how-does-it-work-).
+Or may be you are just interested on how it is working ? In that case, you can jump right [here](https://github.com/Hekmon/TPControl#how-does-it-work-).
 
 ## Simple throughput manager
 
@@ -189,7 +189,7 @@ Once the token pool depleted, workers registered but were not unlock instantly a
 
 # How does it work ?
 
-## If you does not mind reading
+## If you do not mind reading
 
 The TPControl.Scheduler is composed by severals components :
 
